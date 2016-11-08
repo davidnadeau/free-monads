@@ -111,8 +111,6 @@ object MostCats extends App {
     _ <- bell
     _ <- done
   } yield ()
-  println(subroutine)
-  println(program)
 
   def showProgram[R: Show](p: Free[CharToy, R]): String =
     p.fold({ r: R => "return " + Show[R].show(r) + "\n" },
