@@ -1,5 +1,4 @@
-import cats.data.Coproduct
-import cats.free.Inject
+package learning
 
 import scala.language.higherKinds
 

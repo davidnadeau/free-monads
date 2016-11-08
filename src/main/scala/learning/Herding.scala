@@ -1,3 +1,5 @@
+package learning
+
 import cats._
 import cats.instances.all._
 
@@ -27,7 +29,8 @@ object Herding extends App {
     def fix(toy: CharToy[Fix[CharToy]]) = Fix[CharToy](toy)
   }
 
-  import Fix._, CharToy._
+  import CharToy._
+  import Fix._
 
   println(output('A', fix(done)))
   println(fix(bell(fix(output('A', fix(done))))))

@@ -1,3 +1,5 @@
+package learning
+
 import cats._
 import cats.data.Coproduct
 import cats.free._
@@ -102,11 +104,11 @@ object TheMoney extends App {
     }
 
   }
-  import dsl._
-  import dsl.AuthActions._
   import dsl.InteractActions._
+  import dsl._
   def program(implicit I: InteractActions[App], A: AuthActions[App]) = {
-    import I._, A._
+    import A._
+    import I._
     for {
       id <- ask("What's your userID?")
       password <- ask("What's your password?")

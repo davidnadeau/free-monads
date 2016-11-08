@@ -1,5 +1,6 @@
+package learning
+
 import cats._
-import cats.implicits._
 import cats.free.Free
 
 object FreeList extends App {

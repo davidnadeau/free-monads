@@ -1,13 +1,14 @@
+package learning
+
 import cats.data.Coproduct
 import cats.free.Inject
 
 import scala.language.higherKinds
 
 object Coproducts extends App {
+  import algebra.{lift, _}
   import cats._
   import cats.free.Free
-  import algebra._
-  import algebra.lift
 
 
   object algebra {
@@ -41,8 +42,8 @@ object Coproducts extends App {
   }
 
   def calcProgram[F[_]](implicit I: Inject[Interact, F], C: Inject[Calc, F]): Free[F, Int] = {
-    import Interact._
     import Calc._
+    import Interact._
 
     for {
       m0 <- Recall
@@ -56,8 +57,8 @@ object Coproducts extends App {
   }
 
   def guard[F[_]](implicit A: Inject[Auth, F], I: Inject[Interact, F], C: Inject[Calc, F]): Free[F, Unit] = {
-    import Interact._
     import Auth._
+    import Interact._
 
     for {
       id <- Ask("username?")

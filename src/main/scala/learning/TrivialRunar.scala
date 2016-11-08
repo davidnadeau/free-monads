@@ -1,3 +1,5 @@
+package learning
+
 import scala.collection.mutable
 import scala.language.higherKinds
 
@@ -56,7 +58,6 @@ object TrivialRunar extends App {
 
 object UsingCats extends App {
   import cats._
-  import cats.implicits._
   import cats.free.Free
 
   sealed trait KVSA[A]

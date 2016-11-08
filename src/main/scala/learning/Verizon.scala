@@ -1,5 +1,6 @@
-import cats.Functor
-import cats.free.{Coyoneda, Free}
+package learning
+
+import cats.free.Free
 
 import scala.language.{higherKinds, reflectiveCalls}
 

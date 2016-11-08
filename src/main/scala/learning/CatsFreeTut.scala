@@ -1,6 +1,7 @@
+package learning
+
 import cats._
-import cats.implicits._
-import free.Free
+import cats.free.Free
 
 import scala.collection.mutable
 
