@@ -34,20 +34,18 @@ object MathExprEarlier extends App {
   }
 
   sealed trait Expr[A]
-  case class Val[A](x: Int, a: A) extends Expr[A]
+  case class Num[A](x: Int, a: A) extends Expr[A]
   case class Add[A](e0: Int, e1: Int, a: Int => A) extends Expr[A]
   case class Sub[A](e0: Int, e1: Int, a: Int => A) extends Expr[A]
 
-  implicit val kvsFunctor: Functor[Expr] = new Functor[Expr] {
+  implicit val exprFunctor: Functor[Expr] = new Functor[Expr] {
     def map[A,B](a: Expr[A])(f: A => B) = a match {
-      case Val(x, aa) => Val(x, f(aa))
+      case Num(x, aa) => Num(x, f(aa))
       case Add(e0, e1, aa) => Add(e0, e1, v => f(aa(v)))
       case Sub(e0, e1, aa) => Sub(e0, e1, v => f(aa(v)))
     }
   }
 
-  case class Done[F[_]: Functor, A](a: A) extends Free[F, A]
-  case class More[F[_]: Functor, A](k: F[Free[F,A]]) extends Free[F, A]
   class Free[F[_], A](implicit F: Functor[F]) {
     def flatMap[B](f: A => Free[F,B]): Free[F,B] = this match {
       case Done(a) => f(a)
@@ -55,28 +53,47 @@ object MathExprEarlier extends App {
     }
     def map[B](f: A => B): Free[F, B] = flatMap(x => Done(f(x)))
   }
+  case class Done[F[_]: Functor, A](a: A) extends Free[F, A]
+  case class More[F[_]: Functor, A](k: F[Free[F,A]]) extends Free[F, A]
 
-  def vall(a: Int): Free[Expr, Int] = More(Val(a, Done(a)))
+  def num(a: Int): Free[Expr, Int] = More(Num(a, Done(a)))
   def add(a0: Int, a1: Int): Free[Expr, Int] = More(Add(a0, a1, a => Done(a)))
   def sub(a0: Int, a1: Int): Free[Expr, Int] = More(Sub(a0, a1, a => Done(a)))
 
   def runEvalExpr[A](expr: Free[Expr, A]): A = expr match {
     case More(Add(a0,a1,c)) => runEvalExpr(c(a0 + a1))
     case More(Sub(a0,a1,c)) => runEvalExpr(c(a0 - a1))
-    case More(Val(a0,c)) => runEvalExpr(c)
+    case More(Num(a0,c)) => runEvalExpr(c)
     case Done(a) => a
   }
 
   val simpleProgram = for {
-    n <- vall(1)
+    n <- num(1)
     m <- add(n,n)
   } yield m
 
+
   val complexProgram = for {
-    n <- vall(1)
+    n <- num(1)
     m <- add(n,n)
     o <- sub(m, n)
   } yield o
+
+
+  //  Num(1).flatMap(n =>
+  //  Add(n, n).flatMap(m =>
+  //  Sub(m, n).map(o => o)
+
+  //  More(
+  //    Num(1), n =>
+  //    More(
+  //      Add(n, n), m =>
+  //      More(
+  //        Sub(m, n), o =>
+  //        Done(o)
+  //      )
+  //    )
+  //  )
 
   println(runEvalExpr(simpleProgram))
   println(runEvalExpr(complexProgram))

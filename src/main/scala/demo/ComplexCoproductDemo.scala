@@ -1,53 +1,52 @@
 package demo
 
 import cats._
-import cats.free.{Free, Inject}
+import cats.free._
 import cats.data.Coproduct
 
-import scala.collection.mutable
 import scala.language.higherKinds
 
-object ComplexCoproductDemo extends App {
 
-  import dsl._
+object DSL {
+  implicit def lift[F[_], G[_], A](fa: F[A])(implicit I: F :<: G): Free[G, A] =
+    Free.inject[F, G](fa)(Inject[F, G])
+
+  case class User(id: String, hash: String)
+
+  sealed trait ProgramState
+  case object Continue extends ProgramState
+  case object End extends ProgramState
+
+  sealed trait Store[A]
+  object Store {
+    case class SaveUser(user: User) extends Store[Boolean]
+    case class GetUser(id: String) extends Store[Option[User]]
+    case object GetUsers extends Store[List[User]]
+  }
+
+  sealed trait Interact[A]
+  object Interact {
+    case class Ask(prompt: String) extends Interact[String]
+    case class Tell(msg: String) extends Interact[Unit]
+  }
+
+  sealed trait Auth[A]
+  object Auth {
+    case class Hash(password: String) extends Auth[String]
+    case class CheckHash(password: String, hash: String) extends Auth[Boolean]
+  }
+
+  type M0[A] = Coproduct[Store, Interact, A]
+  type PRG[A] = Coproduct[Auth, M0, A]
+}
+
+object Programs {
+  import DSL._
   import Store._
   import Interact._
   import Auth._
 
-  object dsl {
-    implicit def lift[F[_], G[_], A](fa: F[A])(implicit I: Inject[F, G]): Free[G, A] =
-      Free.liftF(I.inj(fa))
-
-    case class User(id: String, hash: String)
-
-    sealed trait ProgramState
-    case object Continue extends ProgramState
-    case object End extends ProgramState
-
-    sealed trait Store[A]
-    object Store {
-      case class SaveUser(user: User) extends Store[Boolean]
-      case class GetUser(id: String) extends Store[Option[User]]
-      case object GetUsers extends Store[List[User]]
-    }
-
-    sealed trait Interact[A]
-    object Interact {
-      case class Ask(prompt: String) extends Interact[String]
-      case class Tell(msg: String) extends Interact[Unit]
-    }
-
-    sealed trait Auth[A]
-    object Auth {
-      case class Hash(password: String) extends Auth[String]
-      case class CheckHash(password: String, hash: String) extends Auth[Boolean]
-    }
-
-    type M0[A] = Coproduct[Store, Interact, A]
-    type App[A] = Coproduct[Auth, M0, A]
-  }
-
-  def createUser[F[_]](implicit I: Inject[Interact, F], A: Inject[Auth, F], S: Inject[Store, F]): Free[F, ProgramState] = {
+  def createUser[F[_]](implicit I: Interact :<: F, A: Auth :<: F, S: Store :<: F): Free[F, ProgramState] = {
     for {
       id    <- Ask("What is your Id?")
       pass  <- Ask("What is your password?")
@@ -58,20 +57,20 @@ object ComplexCoproductDemo extends App {
     } yield Continue
   }
 
-  def isAuthenticated[F[_]](implicit I: Inject[Interact, F], A: Inject[Auth, F], S: Inject[Store, F]): Free[F, ProgramState] = {
+  def isAuthenticated[F[_]](implicit I: Interact :<: F, A: Auth :<: F, S: Store :<: F): Free[F, ProgramState] = {
     for {
       id    <- Ask("What is your Id?")
       pass  <- Ask("What is your password?")
       oUser <- GetUser(id)
       b     <- oUser match {
-                 case Some(user) => CheckHash(pass, user.hash)
-                 case None => CheckHash("", "")
-               }
+        case Some(user) => CheckHash(pass, user.hash)
+        case None => CheckHash("", "")
+      }
       _     <- if (b) Tell(s"User $id is authenticated") else Tell(s"Invalid!")
     } yield Continue
   }
 
-  def printUserTable[F[_]](implicit I: Inject[Interact, F], S: Inject[Store, F]): Free[F, ProgramState] = {
+  def printUserTable[F[_]](implicit I: Interact :<: F, S: Store :<: F): Free[F, ProgramState] = {
     for {
       users <- GetUsers
       _     <- Tell("id\thash")
@@ -79,37 +78,45 @@ object ComplexCoproductDemo extends App {
     } yield Continue
   }
 
-  def quit[F[_]](implicit I: Inject[Interact, F], S: Inject[Store, F]): Free[F, ProgramState] = {
+  def quit[F[_]](implicit I: Interact :<: F, S: Store :<: F): Free[F, ProgramState] = {
     for {
       _     <- printUserTable
       _     <- Tell("Cya!")
     } yield End
   }
 
-  def invalidSelection[F[_]](implicit I: Inject[Interact, F]): Free[F, ProgramState] = {
+  def invalidSelection[F[_]](implicit I: Interact :<: F): Free[F, ProgramState] = {
     for {
       _     <- Tell("Not a valid selection")
     } yield Continue
   }
 
-  def userProgram[F[_]](implicit I: Inject[Interact, F], A: Inject[Auth, F], S: Inject[Store, F]): Free[F, Unit] = {
+  def userProgram[F[_]](implicit I: Interact :<: F, A: Auth :<: F, S: Store :<: F): Free[F, Unit] = {
     for {
       res   <- Ask("Select an option from below\n1) Create a user\n2) Auth a user\n3) See existing users\n4) Quit")
       s     <- res match {
-                 case "1" => createUser
-                 case "2" => isAuthenticated
-                 case "3" => printUserTable
-                 case "4" => quit
-                 case _   => invalidSelection
-               }
+        case "1" => createUser
+        case "2" => isAuthenticated
+        case "3" => printUserTable
+        case "4" => quit
+        case _   => invalidSelection
+      }
       _     <- s match {
-                 case Continue => userProgram
-                 case End => Free.pure[F, String]("end")
-               }
+        case Continue => userProgram
+        case End => Free.pure[F, String]("end")
+      }
     } yield ()
   }
+}
+
+object Interpreters {
+  import DSL._
+  import Store._
+  import Interact._
+  import Auth._
 
   def storeInterpreter: (Store ~> Id) = new (Store ~> Id) {
+    import scala.collection.mutable
     val store = mutable.Map.empty[String, User]
 
     override def apply[A](fa: Store[A]): Id[A] = fa match {
@@ -142,10 +149,16 @@ object ComplexCoproductDemo extends App {
       case CheckHash(password, hash) => (md5(password) == hash).asInstanceOf[A]
     }
   }
+}
+
+object Main extends App {
+  import DSL._
+  import Programs._
+  import Interpreters._
 
   val interpreter0: M0 ~> Id = storeInterpreter or interactInterpreter
-  val interpreter: App ~> Id = authInterpreter or interpreter0
-  val program: Free[App, Unit] = userProgram[App]
+  val interpreter: PRG ~> Id = authInterpreter or interpreter0
+  val program: Free[PRG, Unit] = userProgram[PRG]
 
   program.foldMap(interpreter)
 }
